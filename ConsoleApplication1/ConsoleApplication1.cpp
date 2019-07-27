@@ -19,10 +19,29 @@ int board[height][width] = {0, 0, 0, 0, 0, 8, 0, 0, 0,
 														0, 7, 0, 3, 0, 0, 0, 0, 0,
 														0, 5, 1, 0, 0, 2, 0, 0, 0, 
 														9, 0, 0, 0, 5, 0, 8, 7, 0};
+list<int> possibilitiesArray[9][9];
 
 struct coordinate {
 		int x, y;
 };
+
+template <typename T>
+void printList(list<T> l) {
+  typename list<T>::iterator it; 
+	for (it = l.begin(); it != l.end(); it++) {
+			cout << *it << ',';
+	}
+	cout << '\n';
+}
+
+template <> 
+void printList<coordinate>(list<coordinate> l) {
+	list<coordinate>::iterator it; 
+	for (it = l.begin(); it != l.end(); it++) {
+			cout << (*it).x << ',' << (*it).y << '\n' ;
+	}
+	cout << '\n';
+}
 
 int getCellContent(coordinate place) {
 	return board[place.x][place.y];
@@ -152,52 +171,33 @@ coordinate* getNeighbors(coordinate place) {
 	return getNeighbors(place, false);
 }
 
-class possibilitiesArray {
-	public:
-	coordinate place;
-	list<int> possibilities;
-
-	possibilitiesArray(coordinate a) {
-		place = a;
-		for (int i = 1; i <= 9; i++) {
-			possibilities.insert(possibilities.end(), i);
-		}
+void basicUpdatePossibilities(coordinate place) {
+  coordinate* coordianates = getNeighbors(place);
+	for (int i = 0; i < 20; i++) {
+		possibilitiesArray[place.x][place.y].remove(getCellContent(coordianates[i]));
 	}
+}
 
-	list<int> updatePossibilities() {
-		coordinate* coordianates = getNeighbors(place);
-		for (int i = 0; i < 20; i++) {
-			possibilities.remove(getCellContent(coordianates[i]));
-		}
-		return possibilities;
-	}
-};
-
-vector<possibilitiesArray> preparePossibilitieArrays() {
-	int counter = 0;
-	vector<possibilitiesArray> arr;
-	arr.reserve(81);
-
+void updatePossibilitieArrays() {
 	for (int i = 0; i < 9; i++) {
 		for (int j = 0; j < 9; j++) {
-			coordinate currentCoordinate{i, j};
-			possibilitiesArray currentArr(currentCoordinate);
+			coordinate currentCoordinate {i, j};
 			if (getCellContent(currentCoordinate) == 0) {
-				currentArr.updatePossibilities();
+				basicUpdatePossibilities(currentCoordinate);
 			}
-			arr.push_back(currentArr);
 		}
 	}
-	return arr;
 }
 
 bool updateBoardByPossibilties(bool lastUpdated) {
 	bool updated = false;
-  vector<possibilitiesArray> arr = preparePossibilitieArrays();
-	for (int i = 0; i < arr.size(); i++) {
-		if (arr[i].possibilities.size() == 1) {
-			updated = true;
-			board[arr[i].place.x][arr[i].place.y] = arr[i].possibilities.front();
+  updatePossibilitieArrays();
+	for (int i = 0; i < 9; i++) {
+		for (int j = 0; j < 9; j++) {
+			if (getCellContent(coordinate{i, j}) == 0 && possibilitiesArray[i][j].size() == 1) {
+			  updated = true;
+			  board[i][j] = possibilitiesArray[i][j].front();
+		  }
 		}
 	}
 	if (updated) {
@@ -216,13 +216,16 @@ bool checkIfIntListContainsNum(list<int> listToCheck, int num) {
   return it != listToCheck.end();
 }
 
+list<int> getPossibilitiesByCoordinate(coordinate c) {
+  return possibilitiesArray[c.x][c.y];
+}
+
 list<coordinate>* getNumbersPossibleOccurences(coordinate* neighbors) {
 	list<coordinate>* possibleOccurenceList = new list<coordinate>[9];
 	for (int i = 0; i < 9; i++) {
 		for (int j = 0; j < 9; j++) {
-		  possibilitiesArray currentArr(neighbors[j]);
 			if (getCellContent(neighbors[j]) == 0) {
-				if (checkIfIntListContainsNum(currentArr.updatePossibilities(), i + 1)) {
+				if (checkIfIntListContainsNum(getPossibilitiesByCoordinate(neighbors[j]), i + 1)) {
 				  possibleOccurenceList[i].push_back(neighbors[j]);
 				}
 			}
@@ -241,13 +244,23 @@ coordinate* getNeighborsByType(coordinate cor, string type, bool selfIncluded) {
 	return getNeighborSquare(cor, true);
 }
 
+void updateNeighborsOfChange(coordinate currentCoordinate) {
+  int content = getCellContent(currentCoordinate);
+	coordinate* neighbors = getNeighbors(currentCoordinate);
+	for (int i = 0; i < 20; i++) {
+		coordinate neighbor = neighbors[i];
+		possibilitiesArray[neighbor.x][neighbor.y].remove(content);
+	}
+}
+
 bool updateNeighborsByPossibleOccurenes(coordinate* neighbors) {
   bool updated = false;
 	list<coordinate>* list = getNumbersPossibleOccurences(neighbors);
   for (int i = 0; i < 9; i++) {
 	  if (list[i].size() == 1) {
-	    coordinate toPlace = list[i].back();
+	    coordinate toPlace = list[i].back();		
 	    board[toPlace.x][toPlace.y] = i + 1;
+			updateNeighborsOfChange(toPlace);
 		  updated = true;
 	  }
   }
@@ -282,6 +295,7 @@ bool updateBoardBySpecificPossibleOccurences(string neighborsType ,bool lastUpda
 }
 
 bool updateBoardByAllPossibleOccurences(bool lastUpdated) {
+	updatePossibilitieArrays();
 	bool updatedColumns = updateBoardBySpecificPossibleOccurences("column", false);
 	bool updatedRows = updateBoardBySpecificPossibleOccurences("row", false);
 	bool updatedSquares = updateBoardBySpecificPossibleOccurences("square", false);
@@ -301,7 +315,18 @@ void updateBoard() {
 	}
 }
 
+void initializePossibilities() {
+  for (int i = 0; i < 9; i++) {
+	  for (int j = 0; j < 9; j++) {
+			for (int m = 1; m <= 9; m++) {
+			  possibilitiesArray[i][j].insert(possibilitiesArray[i][j].end(), m);
+      }
+		}
+  }
+}
+
 int main() {
+  initializePossibilities();
 	updateBoard();
 	printBoard(board);
 }
